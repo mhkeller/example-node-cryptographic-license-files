@@ -3,9 +3,11 @@ const { KEYGEN_PUBLIC_KEY } = process.env
 const crypto = require('crypto')
 const chalk = require('chalk')
 const fs = require('fs/promises')
+const { machineId } = require('node-machine-id')
 
 async function main() {
   let licenseFilePath, licenseKey
+  const fingerprint = await machineId()
 
   // Parse argument flags
   process.argv.forEach((arg, i, argv) => {
@@ -36,7 +38,7 @@ async function main() {
   }
 
   const licenseFile = await fs.readFile(licenseFilePath, { encoding: 'utf-8' })
-  const encodedPayload  = licenseFile.replace(/-----(?:BEGIN|END) LICENSE FILE-----\n?/g, '')
+  const encodedPayload  = licenseFile.replace(/-----(?:BEGIN|END) MACHINE FILE-----\n?/g, '')
   const decodedPayload = Buffer.from(encodedPayload, 'base64').toString()
   const payload = JSON.parse(decodedPayload)
 
@@ -51,7 +53,7 @@ async function main() {
   const decodedPublicKey = Buffer.from(KEYGEN_PUBLIC_KEY, 'base64')
   const publicKey = crypto.createPublicKey({ key: decodedPublicKey, format: 'der', type: 'spki' })
   const signatureBytes = Buffer.from(sig, 'base64')
-  const dataBytes = Buffer.from(`license/${enc}`)
+  const dataBytes = Buffer.from(`machine/${enc}`)
   const ok = crypto.verify(null, dataBytes, publicKey, signatureBytes)
   if (!ok) {
     throw new Error(`License file signature verification failed!`)
@@ -63,7 +65,7 @@ async function main() {
   )
 
   const [ciphertext, iv, tag] = enc.split('.')
-  const digest = crypto.createHash('sha256').update(licenseKey).digest()
+  const digest = crypto.createHash('sha256').update(licenseKey + fingerprint).digest()
   const aes = crypto.createDecipheriv('aes-256-gcm', digest, Buffer.from(iv, 'base64'))
 
   aes.setAuthTag(Buffer.from(tag, 'base64'))
